@@ -141,19 +141,33 @@
                  form.append('name',chunk.name)
                  return {form,index:chunk.index,error:0}
               })
-              .map(({form,index})=>{
-                  return this.$http.post('/uploadfile',form,{
-                      onUploadProgress:progress=>{
+            //   .map(({form,index})=>{
+            //       return this.$http.post('/uploadfile',form,{
+            //           onUploadProgress:progress=>{
+            //               this.chunks[index].progress=Number(((progress.loaded/progress.total)*100).toFixed(2))
+            //           }
+            //       })
+            //   })
+            // //   console.log(requests)
+            //   Promise.all(requests).then((res)=>{
+            //     console.log(res)
+            //     this.mergeFile()
+            //   })
+               const upLoadReq=(i)=>{
+                   if(i>=requests.length && requests.length>0){
+                    return this.mergeFile()
+                   }
+                   const req=requests[i]
+                   const {form,index}=req
+                   this.$http.post('/uploadfile',form,{
+                       onUploadProgress:progress=>{
                           this.chunks[index].progress=Number(((progress.loaded/progress.total)*100).toFixed(2))
                       }
-                  })
-              })
-            //   console.log(requests)
-              Promise.all(requests).then((res)=>{
-                console.log(res)
-                this.mergeFile()
-              })
-
+                   }).then(res=>{
+                       upLoadReq(i+1)
+                   })
+               }
+               upLoadReq(0)
             },
             mergeFile(){
                 // const {ext,size,hash}=body
