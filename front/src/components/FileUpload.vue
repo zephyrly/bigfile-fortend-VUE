@@ -35,21 +35,12 @@
                 </div>
            </div>
            
-           <!-- <div class="wrapBox" ref="wrapBox">
-                <div id="block" ref="block" :style="{left:`${computedLeft}px`}"></div>
-           </div> -->
-  
-           <!-- <el-input ref='file' type='file'></el-input>
-          <el-input type="file" @change="handleFileChange" label='选择文件'></el-input>
-          
-           
-           <el-button type="primary">上传文件</el-button> -->
         </div>
     </div>
 </template>
 
 <script>
-    const CHUNK_SIZE=1024*1024
+    const CHUNK_SIZE=8*1024*1024
     import sparkMD5 from 'spark-md5'
     export default {
         name:'file-upload',
@@ -59,7 +50,6 @@
               chunks:[],
               hashProgress:0,
               hash:''
-            //   computedLeft:0,
             }
         },
         computed:{
@@ -131,7 +121,7 @@
               })
             },
 
-            uploadChunks(uploadedList){
+            async uploadChunks(uploadedList){
               console.log(this.chunks)
               const requests=this.chunks.filter(chunk=>!uploadedList.includes(chunk.name))
               .map((chunk,index)=>{
@@ -153,21 +143,63 @@
             //     console.log(res)
             //     this.mergeFile()
             //   })
-               const upLoadReq=(i)=>{
-                   if(i>=requests.length && requests.length>0){
-                    return this.mergeFile()
-                   }
-                   const req=requests[i]
-                   const {form,index}=req
-                   this.$http.post('/uploadfile',form,{
-                       onUploadProgress:progress=>{
-                          this.chunks[index].progress=Number(((progress.loaded/progress.total)*100).toFixed(2))
-                      }
-                   }).then(res=>{
-                       upLoadReq(i+1)
-                   })
-               }
-               upLoadReq(0)
+            
+            const sendRequest=(limit=1,task=[])=>{
+                let count=0
+                let isStop=false
+                const len=requests.length
+                return new Promise((resolve,reject)=>{
+                        const upLoadReq=()=>{
+                            if(isStop){
+                                return
+                            }
+                            const req=requests.shift()
+                            if(!req){
+                                return
+                            }
+                            const {form,index}=req
+                            this.$http.post('/uploadfile',form,{
+                                onUploadProgress:progress=>{
+                                    this.chunks[index].progress=Number(((progress.loaded/progress.total)*100).toFixed(2))
+                                }
+                            })
+                            .then(res=>{
+                                //最后一片
+                                if(count==len-1){
+                                resolve()
+                                }else{
+                                count++
+                                upLoadReq()
+                                }
+                            })
+                            .catch(err=>{
+                                this.chunks[index].progress=-1
+                                if(req.error<3){
+                                    req.error++
+                                    requests.unshift(req)
+                                    upLoadReq()
+                                }else{
+                                    isStop=true
+                                    reject()
+                                }
+                            })
+                        }
+
+                        while(limit>0){
+                          setTimeout(()=>{
+                            upLoadReq()
+                          },Math.random()*2000)
+                          limit--
+                        }
+                })
+
+            }
+
+               sendRequest(3).then(res=>{
+                  console.log(res)
+                  this.mergeFile()
+               })
+               
             },
             mergeFile(){
                 // const {ext,size,hash}=body
@@ -224,19 +256,7 @@
                })
 
             },
-            blockMoveStop(){
-              clearInterval(this.timer)
-              const Total=this.$refs.wrapBox.clientWidth;
-              const LeftTotal=Total-this.$refs.block.clientWidth;
-              const self=this
-               move()
-               function move(){
-                   if(self.computedLeft<LeftTotal){
-                       self.computedLeft+=1
-                       requestAnimationFrame(move)
-                   }
-               }
-            }
+
         }
     }
 </script>
